@@ -4,6 +4,10 @@
 #define WAKE_PIN
 #define RESET_PIN
 #define CCS881_ADDR
+#define MODE 3
+#define INT_DATARDY 0
+#define INT_THRESH 0
+
 
 //blocking init function
 void ccs881_init();
