@@ -3,6 +3,11 @@
 
 #define DATA_PIN
 
+uint32_t DHT22_start_count;
+uint32_t DHT22_end_count;
+
+uint8_t DHT22_status;
+
 //init function for timer
 void DHT22_init();
 
