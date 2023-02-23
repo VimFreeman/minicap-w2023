@@ -12,6 +12,6 @@ uint8_t DHT22_status;
 void DHT22_init();
 
 //function to get reading from DHT22, reads data serially using time of high pulses
-void DHT22_read_data(uint8_t* data, const uint8_t maxLen);
+void DHT22_read_data(uint8_t* data);
 
 #endif
