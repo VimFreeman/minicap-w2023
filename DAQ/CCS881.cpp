@@ -6,7 +6,6 @@ void ccs881_init() {
     delayMicroseconds(50);
     uint8_t temp = MODE | INT_DATARDY | INT_THRESH;
     ccs881_write_reg(&temp, MEAS_MODE, 1);
-
 }
 
 void ccs881_read_reg(uint8_t* data, const uint8_t regAddr, const uint8_t len) {
