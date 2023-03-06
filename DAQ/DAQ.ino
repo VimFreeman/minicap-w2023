@@ -16,8 +16,10 @@ BluetoothSerial SerialBT;
 
 uint16_t voc = 0;
 uint16_t co2 = 0;
-float temp = 0;
-float hum = 0;
+uint8_t tempInt = 0;
+uint8_t tempFrac = 0;
+uint8_t humInt = 0;
+uint8_t humFrac = 0;
 
 void getCCS();
 void getDHT();
@@ -45,7 +47,7 @@ void loop()
   if (myCCS.dataAvailable())
   {
     getCCS();
-    getDHT(); // we put it with myCCS so as not to spam the console
+    getDHT(); // we put it with myCCS so as not to spam the serial console
   }
 
   // handle bluetooth requests
@@ -55,15 +57,18 @@ void loop()
       case 48:
         SerialBT.write((uint8_t*)&co2, 2);
         SerialBT.write((uint8_t*)&voc, 2);
-        SerialBT.write((uint8_t*)&temp, 4);
-        SerialBT.write((uint8_t*)&hum, 4);
+        SerialBT.write(tempInt);
+        SerialBT.write(tempFrac);
+        SerialBT.write(humInt);
+        SerialBT.write(humFrac);
+        SerialBT.write(10);
         break;
       default:
         break;
     }
   }
 
-  delay(10); //Don't spam the I2C bus
+  delay(10); // We don't want to spam the I2C bus
 }
 
 void getCCS() {
@@ -74,9 +79,11 @@ void getCCS() {
 
   // Serial port sensor debugging
   Serial.print("CO2: ");
-  Serial.println(co2);
+  Serial.print(co2);
+  Serial.println(" ppm");
   Serial.print("tVOC: ");
-  Serial.println(voc);
+  Serial.print(voc);
+  Serial.println(" ppb");
   // ----------------------------
 }
 
@@ -87,16 +94,20 @@ void getDHT() {
   myDHT.temperature().getEvent(&tempEvent);
   myDHT.humidity().getEvent(&humEvent);
 
-  hum = humEvent.relative_humidity;
-  temp = tempEvent.temperature;
+  float temp = tempEvent.temperature;
+  float hum = humEvent.relative_humidity;
 
-  // Serial port sensor debugging
-  Serial.print(F("Temperature: "));
-  Serial.print(temp);
-  Serial.println(F("°C"));
+  float temptempInt;
+  float temphumInt;
 
-  Serial.print(F("Humidity: "));
-  Serial.print(hum);
-  Serial.println(F("%"));
-  //------------------------------
+  tempFrac = (uint8_t)(modf(temp, &temptempInt)*100);
+  humFrac = (uint8_t)(modf(hum, &temphumInt)*100);
+
+  tempInt = (uint8_t)temptempInt;
+  humInt = (uint8_t)temphumInt;
+
+  // Serial port debugging
+  Serial.println("Temp: " + String(tempInt) + "." + String(tempFrac) + "°C");
+  Serial.println("Humidity: " + String(humInt) + "." + String(humFrac) + "%");
+  //----------------------
 }
