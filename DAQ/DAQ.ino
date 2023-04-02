@@ -9,7 +9,7 @@
 #include <DHT_U.h>
 
 #define CCS811_ADDR 0x5A // CCS811 I2C ADDRESS
-#define DHT_PIN 32
+#define DHT_PIN 2
 #define DHT_TYPE DHT22
 #define PM Serial2
 
@@ -23,12 +23,8 @@ BLECharacteristic ccsChar("5f551915-bdc8-4bac-b9df-12256620e1cf", perms);
 BLEDescriptor ccsDesc(BLEUUID((uint16_t)0x2902));
 BLECharacteristic dhtChar("f78ebbff-c8b7-4107-93de-889a6a06d408", perms);
 BLEDescriptor dhtDesc(BLEUUID((uint16_t)0x2902));
-BLECharacteristic pm1Char("ca73b3ba-39f6-4ab3-91ae-186dc9577d99", perms);
-BLEDescriptor pm1Desc(BLEUUID((uint16_t)0x2902));
-BLECharacteristic pm2Char("168c693b-b9c8-4053-9fde-be87f7d14b72", perms);
-BLEDescriptor pm2Desc(BLEUUID((uint16_t)0x2902));
-BLECharacteristic pm10Char("8e713220-d13a-484d-a251-36d1aa957ecb", perms);
-BLEDescriptor pm10Desc(BLEUUID((uint16_t)0x2902));
+BLECharacteristic pmChar("ca73b3ba-39f6-4ab3-91ae-186dc9577d99", perms);
+BLEDescriptor pmDesc(BLEUUID((uint16_t)0x2902));
 
 bool deviceConnected = false;
 bool connecting = false;
@@ -41,15 +37,12 @@ uint8_t tempFrac = 0;
 uint8_t humInt = 0;
 uint8_t humFrac = 0;
 
-int pm1 = 0;
 int pm2 = 0;
-int pm10 = 0;
 
 void getCCS();
 void getDHT();
 void getPM();
 void initBLE();
-void updateLEDs();
 
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) {
@@ -73,6 +66,7 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(115200);
+  delay(1000);
   PM.begin(9600); // enable Serial2 for PM sensor
   Wire.begin(); // Enable I2C Peripheral for CCS
 
@@ -93,11 +87,9 @@ void loop()
   if (deviceConnected) {
     if (myCCS.dataAvailable()) { getCCS(); }
     getDHT();
-    //getPM();
+    getPM();
     Serial.println();  
     
-    // update LEDs
-    updateLEDs();  
     delay(2000);
   } 
 }
@@ -112,28 +104,20 @@ void initBLE() {
   // Add characteristics to service
   pService->addCharacteristic(&ccsChar);
   pService->addCharacteristic(&dhtChar);
-  // pService->addCharacteristic(&pm1Char);
-  // pService->addCharacteristic(&pm2Char);
-  // pService->addCharacteristic(&pm10Char);
+  pService->addCharacteristic(&pmChar);
   
   ccsDesc.setValue("CCS811 CO2 and VOC");
   dhtDesc.setValue("DHT Temp and Humidity");
-  pm1Desc.setValue("PM1.0");
-  pm2Desc.setValue("PM2.5");
-  pm10Desc.setValue("PM10");
+  pmDesc.setValue("PM2.5");
 
   ccsChar.addDescriptor(&ccsDesc);
   dhtChar.addDescriptor(&dhtDesc);
-  pm1Char.addDescriptor(&pm1Desc);
-  pm2Char.addDescriptor(&pm2Desc);
-  pm10Char.addDescriptor(&pm10Desc);
+  pmChar.addDescriptor(&pmDesc);
 
   // write some initial values to the chars
   ccsChar.setValue("0");
   dhtChar.setValue("0");
-  pm1Char.setValue("0");
-  pm2Char.setValue("0");
-  pm10Char.setValue("0");
+  pmChar.setValue("0");
 
   pService->start();
   
@@ -195,39 +179,29 @@ void getDHT() {
 }
 
 void getPM() {
-  // need to figure out what a "DF" is. My assumption is that it's a uart data frame (i.e. 8 bits)
-  PM.write(0x110102EC);
-  long dummy;
-  long part1;
-  long part2;
-  long part3;
+  PM.write(0x11);
+  PM.write(0x01);
+  PM.write(0x02);
+  PM.write(0xEC);
   
-  PM.read((uint8_t*)dummy, 3);
-  PM.read((uint8_t*)part1, 4);
-  PM.read((uint8_t*)part2, 4);
-  PM.read((uint8_t*)part3, 4);
-
-  // probably not necessary. Need to test with and without
-  // could be that we just need to read one more byte
-  // can test by making a loop after line 130 that reads until empty and count the number of bytes read.
-  while(PM.available()>0) {
-    PM.read(); // flush input buffer
+  uint8_t* dummy = new uint8_t[3];
+  uint8_t* part1 = new uint8_t[4];
+  uint8_t* part2 = new uint8_t[4];
+  uint8_t* part3 = new uint8_t[4];
+ 
+  if (PM.available() > 0) {
+    PM.readBytes(dummy, 3);
+    PM.readBytes(part1, 4);
+    PM.readBytes(part2, 4);
+    PM.readBytes(part3, 4); 
+    PM.read(); // read last bit [CS]
   }
-  // check if read is little or big endian
 
-  // here we assume DF4-3-2-1
-  pm2 = (part1 & 0x00FF0000)*256 + (part1 & 0xFF000000);
-  pm1 = (part2 & 0x00FF0000)*256^1 + (part2 & 0xFF000000);
-  pm10 = (part2 & 0x00FF0000)*256^1 + (part2 & 0xF000000);
+  int pm2 = (uint32_t)part1[2]*256 + ((uint32_t)part1[3]);
 
-  pm1Char.setValue(pm1);
-  pm1Char.notify();
-  pm2Char.setValue(pm2);
-  pm2Char.notify();
-  pm10Char.setValue(pm10);
-  pm10Char.notify();
-}
+  pmChar.setValue(pm2);
+  pmChar.notify();
 
-void updateLEDs() {
-  
+  // Serial port debugging
+  Serial.println("PM2.5: " + String(pm2) + "ug/m^3");
 }
